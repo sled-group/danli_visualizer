@@ -1,0 +1,3 @@
+1. goto xxx
+2. pick up xxx
+3. slice xxx
