@@ -52,8 +52,8 @@ class GUI(QMainWindow):
         self.events_textBrowser = self.findChild(QTextBrowser, "events_textBrowser")
         self.plan_textBrowser = self.findChild(QTextBrowser, "plan_textBrowser")
 
-        self.last_action_label = self.findChild(QLabel, "last_action_label")
-        self.action_to_take_label = self.findChild(QLabel, "action_to_take_label")
+        self.last_action_textBrowser = self.findChild(QTextBrowser, "last_action_textBrowser")
+        self.action_to_take_textBrowser = self.findChild(QTextBrowser, "action_to_take_textBrowser")
 
         self.events_label = self.findChild(QLabel, "events_label")
 
@@ -139,8 +139,8 @@ class GUI(QMainWindow):
             self.plan_textBrowser.setMarkdown('\n'.join([str(d) for d in step_data['status']['plan']]))
             self.events_textBrowser.setMarkdown('\n'.join([str(d) for d in step_data['status']['events']]))
 
-        self.last_action_label.setText('{} {} {}'.format(step_data['last_action']['action_type'], step_data['last_action'].get('instance_id', ''), ": Succeeded" if step_data['last_action'].get('last_action_success') in (True,None) else ': Failed'))
-        self.action_to_take_label.setText('{} {}'.format(step_data['action_to_take']['action_type'], step_data['last_action'].get('instance_id', '')))
+        self.last_action_textBrowser.setText('{} {} {}'.format(step_data['last_action']['action_type'], step_data['last_action'].get('instance_id', ''), ": Succeeded" if step_data['last_action'].get('last_action_success') in (True,None) else ': Failed'))
+        self.action_to_take_textBrowser.setText('{} {}'.format(step_data['action_to_take']['action_type'], step_data['last_action'].get('instance_id', '')))
 
 
 if __name__ == "__main__":

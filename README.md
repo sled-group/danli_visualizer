@@ -6,11 +6,11 @@ Tested on sled-whistler.
 
 Create a conda environment and install the necessary packages:
 ```
-conda create -n simbot-visualizer -f environment.yml
+conda create -n simbot_visualizer -f environment.yml
 ```
 Then activate the environment and run the main program:
 ```
-conda activate simbot-visualizer
+conda activate simbot_visualizer
 python main.py
 ```
 ![Visualizer Demo](demo.png)
