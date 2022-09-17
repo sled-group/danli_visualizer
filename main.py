@@ -110,7 +110,7 @@ class GUI(QMainWindow):
 
     def update_gui(self):
 
-        base_dir = '/data/simbot/teach-eval/neural_symbolic/viz_new/meta/a0ccd363ffb0ee94_c237_edh0'
+        base_dir = '/data/simbot/teach-eval/neural_symbolic/viz_new/meta/b2815444299854b0_d30e_edh2'
         with open(os.path.join(base_dir, 'meta_data.json'), 'r') as meta_data_file:
             meta_data = json.load(meta_data_file)
 
@@ -120,7 +120,12 @@ class GUI(QMainWindow):
         self.dialog_textBrowser.setMarkdown(self._process_dialogs_data(dialogs_data))
         self.subgoal_textBrowser.setMarkdown(self._process_subgoals_data(subgoals_data))
 
-        step_data = meta_data['steps'][self.current_step]
+        try:
+            step_data = meta_data['steps'][self.current_step]
+        except:
+            print('Already at the end')
+            self.current_step -= 1
+            step_data = meta_data['steps'][self.current_step]
 
         img_idx = step_data['img_idx']
 
@@ -139,8 +144,12 @@ class GUI(QMainWindow):
             self.plan_textBrowser.setMarkdown('\n'.join([str(d) for d in step_data['status']['plan']]))
             self.events_textBrowser.setMarkdown('\n'.join([str(d) for d in step_data['status']['events']]))
 
+
         self.last_action_textBrowser.setText('{} {} {}'.format(step_data['last_action']['action_type'], step_data['last_action'].get('instance_id', ''), ": Succeeded" if step_data['last_action'].get('last_action_success') in (True,None) else ': Failed'))
-        self.action_to_take_textBrowser.setText('{} {}'.format(step_data['action_to_take']['action_type'], step_data['last_action'].get('instance_id', '')))
+        try:
+            self.action_to_take_textBrowser.setText('{} {}'.format(step_data['action_to_take']['action_type'], step_data['last_action'].get('instance_id', '')))
+        except:
+            self.action_to_take_textBrowser.setText('')
 
 
 if __name__ == "__main__":
