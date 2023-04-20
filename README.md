@@ -7,7 +7,7 @@ Tested on sled-whistler.
 Create a conda environment and install the necessary packages:
 ```
 conda create -n simbot_visualizer 
-install -r requirements.txt
+pip install -r requirements.txt
 ```
 Then activate the environment and run the main program:
 ```
