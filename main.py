@@ -1,5 +1,6 @@
 import json
 import os
+import argparse
 
 from PyQt5.QtWidgets import QMainWindow, QApplication, QPushButton, QTextEdit, QLabel, QTextBrowser
 from PyQt5.QtGui import QPixmap
@@ -7,6 +8,21 @@ from PyQt5 import QtCore, QtGui
 
 from PyQt5 import uic
 import sys
+
+PredicateToLang = {
+    "NONE": " none",
+    "isCooked": " cook",
+    "isClean": " rinse",
+    "isPickedUp": " get",
+    "isFilledWithLiquid": " fill water",
+    "isEmptied": " empty",
+    "isSliced": " slice",
+    "simbotIsBoiled": " boil",
+    "simbotIsFilledWithCoffee": " fill coffee",
+    "parentReceptacles": " place",
+    "EOS": " completed",
+}
+
 
 # custom label to display image: https://stackoverflow.com/questions/21041941/how-to-autoresize-qlabel-pixmap-keeping-ratio-without-using-classes
 class ScaledLabel(QLabel):
@@ -31,11 +47,18 @@ class ScaledLabel(QLabel):
 
 
 class GUI(QMainWindow):
-    def __init__(self):
+    def __init__(self, edh_name):
         super(GUI, self).__init__()
-        uic.loadUi("mainwindow.ui", self)
+        uic.loadUi("mainwindow_v2.ui", self)
+
+        # self.setFixedHeight(1000)
+        # self.setFixedWidth(1500)
+
+        self.base_dir = '/data/simbot/teach-eval/neural_symbolic/viz_0919/meta/'
+        self.exp_dir = os.path.join(self.base_dir, edh_name)
 
         self.current_step = 1
+        self.prev_step = 0
 
         # find the widgets in the xml file
         self.rawObservationDisplay = self.findChild(QLabel, "rawObservationDisplay")
@@ -52,8 +75,12 @@ class GUI(QMainWindow):
         self.events_textBrowser = self.findChild(QTextBrowser, "events_textBrowser")
         self.plan_textBrowser = self.findChild(QTextBrowser, "plan_textBrowser")
 
-        self.last_action_textBrowser = self.findChild(QTextBrowser, "last_action_textBrowser")
-        self.action_to_take_textBrowser = self.findChild(QTextBrowser, "action_to_take_textBrowser")
+        self.curr_subgoal_textBrowser = self.findChild(QTextBrowser, "curr_sg_textBrowser")
+
+        # self.last_action_textBrowser = self.findChild(QTextBrowser, "last_action_textBrowser")
+        # self.last_action_label = self.findChild(QLabel, "last_action_label")
+        # self.execution_status_label = self.findChild(QLabel, "execution_status_label")
+        self.action_to_take_textBrowser = self.findChild(QTextBrowser, "next_action_textBrowser")
 
         self.events_label = self.findChild(QLabel, "events_label")
 
@@ -74,9 +101,11 @@ class GUI(QMainWindow):
 
     def clicked_previous_button(self):
         self.current_step = max(0, self.current_step - 1)
+        self.prev_step = max(0, self.current_step - 1)
         self.update_gui()
 
     def clicked_next_button(self):
+        self.prev_step = self.current_step
         self.current_step = max(0, self.current_step + 1)
         self.update_gui()
 
@@ -99,18 +128,36 @@ class GUI(QMainWindow):
         result = ''
         for dialog in dialogs:
             prefix = 'USR' if dialog[0] == 'Commander' else 'BOT'
-            result += f'{prefix}: {dialog[1]}\n\n'
+            result += f'**{prefix}**: {dialog[1]}\n\n'
         return result
 
     def _process_subgoals_data(self, subgoals):
         result = ''
-        for subgoal in subgoals:
-            result += f'{subgoal[0]} {subgoal[1]} {subgoal[2]}\n\n'
+        for sg_idx, subgoal in enumerate(subgoals):
+            if subgoal[1] == 'parentReceptacles':
+                result += f'**SG{sg_idx}**: ({subgoal[0]}, {subgoal[1]}, {subgoal[2]})\n\n'
+            else:
+                result += f'**SG{sg_idx}**: ({subgoal[0]}, {subgoal[1]})\n\n'
+        return result
+    
+    def _process_plan_data(self, plan):
+        result = ''
+        for a_idx, a in enumerate(plan):
+            a_type, a_arg = a['action'], a['arg']
+            result += f'**A{a_idx}**: {a_type}'
+            result += f'({a_arg})' if a_arg is not None else ''
+            result += '\n\n'
+        return result
+
+    def _process_events_data(self, events, complete_msg, fail_msg):
+        result = fail_msg + '\n\n' if fail_msg else ''
+        result += complete_msg + '\n\n' if complete_msg else ''
+        result += '\n\n'.join([str(d) for d in events])
         return result
 
     def update_gui(self):
+        base_dir = self.exp_dir
 
-        base_dir = '/data/simbot/teach-eval/neural_symbolic/viz_new/meta/b2815444299854b0_d30e_edh2'
         with open(os.path.join(base_dir, 'meta_data.json'), 'r') as meta_data_file:
             meta_data = json.load(meta_data_file)
 
@@ -118,7 +165,7 @@ class GUI(QMainWindow):
         subgoals_data = meta_data['subgoals']
 
         self.dialog_textBrowser.setMarkdown(self._process_dialogs_data(dialogs_data))
-        self.subgoal_textBrowser.setMarkdown(self._process_subgoals_data(subgoals_data))
+        
 
         try:
             step_data = meta_data['steps'][self.current_step]
@@ -126,6 +173,10 @@ class GUI(QMainWindow):
             print('Already at the end')
             self.current_step -= 1
             step_data = meta_data['steps'][self.current_step]
+            step_data['status']['events'].append('The task is completed!')
+        
+        if step_data['stage'] == 'rollout':
+            self.subgoal_textBrowser.setMarkdown(self._process_subgoals_data(subgoals_data))
 
         img_idx = step_data['img_idx']
 
@@ -141,19 +192,46 @@ class GUI(QMainWindow):
         # self._set_text_to_text_browser(self.subgoal_textBrowser, base_dir.format('subgoal/' + str(self.current_step)))
         # self._set_text_to_text_browser(self.plan_textBrowser, step_data['status']['plan'])
         if step_data['status'] is not None:
-            self.plan_textBrowser.setMarkdown('\n'.join([str(d) for d in step_data['status']['plan']]))
-            self.events_textBrowser.setMarkdown('\n'.join([str(d) for d in step_data['status']['events']]))
+            sg_idx = step_data['status']['curr_subgoal_idx']
+            curr_sg = subgoals_data[sg_idx]
+            if curr_sg[1] == 'parentReceptacles':
+                curr_sg_text = f'**SG{sg_idx}**: ({curr_sg[0]}, {curr_sg[1]}, {curr_sg[2]})'
+            else:
+                curr_sg_text = f'**SG{sg_idx}**: ({curr_sg[0]}, {curr_sg[1]})'
+            self.curr_subgoal_textBrowser.setMarkdown(curr_sg_text)
+            self.plan_textBrowser.setMarkdown(self._process_plan_data(step_data['status']['plan']))
+            
+            events = ""
+            events += "Start rollout!\n\n" if meta_data['steps'][self.prev_step]['stage'] == 'replay' else ""
+            events += step_data['status']['fail_msg'] + '\n\n' if step_data['status']['fail_msg'] else ''
+            events += step_data['status']['complete_msg'] + '\n\n' if step_data['status']['complete_msg'] else ''
+            events += '\n\n'.join([str(d) for d in step_data['status']['events']])
+            self.events_textBrowser.setMarkdown(events)
+        else:
+            self.curr_subgoal_textBrowser.setMarkdown('')
+            self.plan_textBrowser.setMarkdown('')
+            self.events_textBrowser.setMarkdown('')
 
-
-        self.last_action_textBrowser.setText('{} {} {}'.format(step_data['last_action']['action_type'], step_data['last_action'].get('instance_id', ''), ": Succeeded" if step_data['last_action'].get('last_action_success') in (True,None) else ': Failed'))
+        # last_action = step_data['last_action']['action_type']
+        # if step_data['last_action'].get('instance_id', ''):
+        #     last_action += '(%s)'%step_data['last_action']['instance_id']
+        # self.last_action_label.setText(last_action)
+        # self.execution_status_label.setText('{}'.format("Succeeded" if step_data['last_action'].get('last_action_success') in (True,None) else ': Failed'))
         try:
-            self.action_to_take_textBrowser.setText('{} {}'.format(step_data['action_to_take']['action_type'], step_data['last_action'].get('instance_id', '')))
+            action_to_take = step_data['action_to_take']['action_type']
+            if step_data['action_to_take'].get('instance_id', ''):
+                action_to_take += '(%s)'%step_data['action_to_take']['instance_id']
+            self.action_to_take_textBrowser.setMarkdown(action_to_take)
         except:
             self.action_to_take_textBrowser.setText('')
 
 
 if __name__ == "__main__":
+    arg_parser = argparse.ArgumentParser()
+    arg_parser.add_argument('--edh_name', type=str, default='a0ccd363ffb0ee94_c237_edh0')
+    args = arg_parser.parse_args()
+
     app = QApplication([])
-    widget = GUI()
+    widget = GUI(args.edh_name)
     widget.show()
     sys.exit(app.exec_())
